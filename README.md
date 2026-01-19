@@ -351,7 +351,9 @@ select * from customer where customer_id = 1;
 
    -- SQL query after denormalization will be 
 
-   select concat('first_name' , ' ' , 'last_name') as customer_name, total_spending from customer order by total_spending desc limit 2;
+   select concat('first_name' , ' ' , 'last_name') as customer_name, total_spending
+   from customer
+    order by total_spending desc limit 2;
    
    -- ********************************************************************************************************************
   -- 3- Create Materlized View
@@ -364,6 +366,144 @@ CREATE MATERIALIZED VIEW customer_total_spending as
   order by total_spending desc;
 
 select * from customer_total_spending order by total_spending desc limit 2;
+```
+## Example 3
+### Write SQL Query to Calculate the revenue generated from each product category.
+```sql
+--  Write SQL Query to Calculate the revenue generated from each product category.
+
+select c.category_id, category_name,  p.product_id, product_name,
+count(*) as times_product_sold, sum(unit_price * quantity) as revenue_per_product
+from category c join product p
+on c.category_id = p.category_id
+join order_details od
+on p.product_id = od.product_id
+group by c.category_id, p.product_id
+order by c.category_id;
+
+  -- ------------------------
+  -- Optimization techniques:
+  -- ------------------------
+  
+  -- 1- Create index
+  --  on category_id  on table product
+  create index idx_category_id on product(category_id);
+  
+   -- on product_id  on  order_details table 
+  create index idx_product_id on order_details(product_id);
+  
+  -- ************************************************************************************************************
+  -- 2- Create Denormalized table "product_revenue"
+   
+  -- steps :
+    -- 1- create product_revenue table
+       create table product_revenue(
+         revenue_id SERIAL PRIMARY KEY,
+         category_id int not null,
+         category_name varchar(50) not null,
+         product_id int not null,
+         product_name varchar(50) not null,
+         times_product_sold int not null,
+          revenue_per_product numeric(15,2)
+       );
+   
+   -- 2- fill "product_revenue" table with existing data 
+   insert into product_revenue (category_id, category_name, product_id, product_name, times_product_sold, revenue_per_product)
+      select c.category_id, category_name,  p.product_id, product_name,
+             count(*) as times_product_sold, sum(unit_price * quantity) as revenue_per_product
+      from category c join product p
+      on c.category_id = p.category_id
+      join order_details od
+      on p.product_id = od.product_id
+      group by c.category_id, p.product_id
+      order by category_id;
+      
+   -- test the result
+      select * from product_revenue limit 10;
+   
+   -- ----------------------------------------------------------------------------------------------------------------------------------
+   
+    -- 3- create trigger to update "product_revenue" table after insertion in order_details table
+      -- There are two cases :
+         -- 1 - insert existing product data
+         -- 2- insert new product data
+      create or replace function update_product_revenue()
+      returns trigger as $$
+      begin 
+        -- new product
+        if new.product_id not in (select product_id from product_revenue) then
+           insert into product_revenue (category_id, category_name, product_id, product_name, times_product_sold, revenue_per_product)
+           values (
+               ( select category_id from product where product_id = new.product_id),
+                (select category_name from category c  join product p on c.category_id = p.category_id and product_id = new.product_id),
+                 new.product_id,
+                ( select product_name from product where product_id = new.product_id),
+                  1,
+                  (new.unit_price * new.quantity)
+                   );
+         -- existing product in
+         else 
+            update product_revenue
+            set 
+               times_product_sold = times_product_sold + 1 ,
+               revenue_per_product = revenue_per_product + (new.quantity * new.unit_price)
+               where product_id = new.product_id;
+         end if;
+      	return new;
+      end;
+      $$
+      language plpgsql;
+      
+   
+    CREATE TRIGGER trigger_update_product_revenue
+    after insert on order_details
+    FOR EACH ROW EXECUTE FUNCTION update_product_revenue();
+
+   -- test the trigger
+
+   select * from product_revenue where product_id = 1000004;
+   
+   select * from order_details where product_id = 1;
+   
+   select count(*) from order_details;
+   -- insert existing product to order_details table.
+   insert into order_details (order_detail_id, order_id, product_id, quantity, unit_price)
+   values (20000001, 1, 1, 1, 112);
+   
+   select * from product_revenue where product_id = 1;
+   
+   -- insert new product to order_details table.
+   
+   insert into product (product_id, category_id, product_name, description, price, stock_quantity)
+   values (1000004, 1, 'sport mate', 'sports machines', 100, 20);
+   
+   insert into order_details (order_detail_id, order_id, product_id, quantity, unit_price)
+   values (20000003, 1, 1000004, 2, 100);
+   
+   select * from product_revenue where product_id = 1000004;
+   
+   -- query after denormlized table
+      select * from product_revenue where category_id = 1;
+   
+   -- **********************************************************************************************
+    -- 3- create Materialized View 
+   
+        CREATE MATERIALIZED VIEW category_product_revenue as
+          select c.category_id, category_name,  p.product_id, product_name,
+          count(*) as times_product_sold, sum(unit_price * quantity) as revenue_per_product
+          from category c join product p
+          on c.category_id = p.category_id
+          join order_details od
+          on p.product_id = od.product_id
+          group by c.category_id, p.product_id
+          order by c.category_id;
+        
+        
+          select * from category_product_revenue where category_id = 1;
+  -- Notes 
+        -- The descion of creating either denormalized table or materialized view depends on frequency of using report query.
+        -- if it is displayed weekly or monthly on the dash board, materialized view is good with schedule cron job for updating.
+        -- if it is displayed daily, denormalized table is good as it will not need to run the that complex query and consume CPU frequently.
 ```
 
 
