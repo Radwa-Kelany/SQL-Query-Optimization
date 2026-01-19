@@ -70,7 +70,7 @@
 ## SQL Query Optimization Using Denormalization and Materlialized View:
 ## Example 1
 ### Write SQL Query to Retrieve the total number of products in each category. 
-\```sql
+```sql
 -- Write SQL Query to Retrieve the total number of products in each category. 
 select category_name, count(*) 
 from category c join product p
@@ -229,10 +229,10 @@ select * from category_products_count limit 10;
 -- but if it is less frequently used, for example " every month or week", we can use Materlialized View with cron job for refresh.
 
 
-\```
+```md
 ## Example 2
 ### Write SQL Query to Find the top customers by total spending. 
-\```sql
+```sql
 -- Write SQL Query to Find the top customers by total spending. 
 
   select concat('first_name',' ', 'last_name') as customer_name , sum(total_amount) as total_spending
@@ -364,4 +364,5 @@ CREATE MATERIALIZED VIEW customer_total_spending as
   order by total_spending desc;
 
 select * from customer_total_spending order by total_spending desc limit 2;
-\```
+```md
+
