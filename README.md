@@ -66,9 +66,8 @@
 
 <img width="593" height="416" alt="query_example_5_2_2" src="https://github.com/user-attachments/assets/5c4dad1c-85b2-4694-aa11-535ca7fc253e" />
 
-### ******************************************************************************
+### *********************************************************************************************
 ## SQL Query Optimization Using Denormalization and Materlialized View:
-### ******************************************************************************
 ## Example 1
 ### Write SQL Query to Retrieve the total number of products in each category. 
 ```sql
@@ -211,7 +210,7 @@ select * from category order by category_id limit 1;
 select category_name, products_count from category limit 2;
 
 
--- ********************************************************************************************************************8
+-- ********************************************************************************************************************
   -- 3- Create Materlized View
 
 CREATE MATERIALIZED VIEW category_products_count as
@@ -228,6 +227,7 @@ select * from category_products_count limit 10;
 -- Notes: 
 -- if query is heavily used in dashborad, we can use Denormalized table or column
 -- but if it is less frequently used, for example " every month or week", we can use Materlialized View with cron job for refresh.
+
 
 
 
