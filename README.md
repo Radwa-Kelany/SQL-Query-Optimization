@@ -511,6 +511,7 @@ order by c.category_id;
 
 
 
-<img width="1547" height="1012" alt="customer features" src="https://github.com/user-attachments/assets/d43354e9-a3d2-4620-950a-407edf250167" />
+<img width="1548" height="1012" alt="customer features" src="https://github.com/user-attachments/assets/c0e44f13-f84b-4ef1-9c84-503fb3dea098" />
+
 
 
