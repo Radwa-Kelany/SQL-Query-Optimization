@@ -66,14 +66,172 @@
 
 <img width="593" height="416" alt="query_example_5_2_2" src="https://github.com/user-attachments/assets/5c4dad1c-85b2-4694-aa11-535ca7fc253e" />
 
-## **********************************************************************************************************************************************************
+## ************************************************************************
 # SQL Query Optimization Using Denormalization and Materlialized View:
-## **********************************************************************************************************************************************************
-
-
+## ************************************************************************
 
 ```sql
-SELECT * FROM users;
+
+
+-- Write SQL Query to Retrieve the total number of products in each category. 
+select category_name, count(*) 
+from category c join product p
+on c.category_id = p.category_id
+and p.is_deleted = false
+group by c.category_id
+order by c.category_id limit 2;
+
+-- Optimization techniques:
+
+-- 1- create index on category_id of product table 
+
+create index idx_category_id on product(category_id);
+
+-- ************************************************************************************************************
+-- 2- Create Denormalized column "products_count" in category table
+
+-- update category table with new column "products_count"
+alter TABLE category add COLUMN products_count INT;
+
+
+-- Test if column added 
+select * from category order by category_id limit 1;
+-- ------------------------------------------------------------------------------------------------------------
+
+-- A- For Existing Data:
+-- fill 'products_count' column with existing data 
+UPDATE category c
+SET products_count = p.product_count
+FROM (
+    SELECT category_id, COUNT(*) as product_count
+    FROM product 
+    where product.is_deleted = false
+    GROUP BY category_id
+) as p
+WHERE c.category_id = p.category_id;
+
+-- -------------------------------------------------------------------------------------------------------------
+
+-- B- For Future Data:
+-- create trigger when insert new product to products table, increment products_count column in category table
+create or replace function increment_products_count ()
+returns trigger as $$ 
+begin
+UPDATE category c
+SET products_count = products_count + 1
+WHERE c.category_id = new.category_id;
+return new;
+end;
+$$
+language plpgsql;
+
+CREATE TRIGGER trigger_increment_products_count
+after insert on product
+FOR EACH ROW EXECUTE FUNCTION increment_products_count();
+
+-- test the trigger 
+select * from category order by category_id limit 1;
+
+--  for example: products_count = 11;
+
+insert  into product (product_id, category_id, product_name,description, price, stock_quantity)
+values (1000002, 1, 'secondt_prod', 'descri', 100.00, 12);
+
+
+select * from category order by category_id limit 1;
+
+-- becomes: products_count = 12;
+-- if products_count of category_id = 1 increase by 1; then the trigger is worked.
+-- -------------------------------------------------------------------------------------------------------------
+ 
+-- C- For Decrementation 
+-- create trigger when delete product from products table, decrement products_count column in category table
+
+-- Deletion here is soft delete, as we will add new column " is_deleted" to product table with default value of "false"
+
+alter TABLE  product add COLUMN  is_deleted boolean  not null default false ;
+
+--  The following function locks the row from any update if is_deleted = true,
+--  but if is_deleted = false, we add another check if the comming update includes [is_deleted = true]
+--  so we will decrement the products_count and allow update of soft delete
+--  but if the coming update inclused any other update rather than soft delete
+--  we do not change products_count in category table and allow update of product table for other columns.
+create or replace function decrement_products_count()
+returns trigger as $$ 
+begin
+    IF OLD.is_deleted THEN
+        RAISE EXCEPTION 'Row is permanently locked';
+
+    ELSEIF  OLD.is_deleted = false then 
+         if new.is_deleted  then 
+            UPDATE category c
+            SET products_count = products_count - 1
+            WHERE c.category_id = new.category_id;
+         END IF;
+    END IF;
+   return new;
+end;
+$$
+language plpgsql;
+
+CREATE TRIGGER trigger_decrement_products_count
+before update ON  product
+FOR EACH ROW EXECUTE FUNCTION decrement_products_count();
+
+
+-- --------------------------------------------------------------------------------------------------
+-- Test update of other columns rather than is_deleted column:
+update product p
+set price = 200
+where product_id = 1000003;
+
+select * from product  where product_id = 1000003;
+
+select * from category order by category_id limit 1;
+
+-- The result should include 'is_deleted = false', and 'products_count' not change.
+-- --------------------------------------------------------------------------------------------------
+
+-- Test update is_deleted column to be true:
+update product p
+set is_deleted = true
+where product_id = 1000003;
+
+select * from product  where product_id = 1000003;
+
+select * from category order by category_id limit 1;
+
+-- The result should include 'is_deleted = true', and 'products_count' decrease by 1.
+
+-- if we try to make any further update on that row "product_id = 1000003", the DBMS will not allow update and 
+-- give error message "Row is permanently locked"
+
+
+-- SQL query after denormalization will be 
+
+select category_name, products_count from category limit 2;
+
+
+-- ********************************************************************************************************************8
+  -- 3- Create Materlized View
+
+CREATE MATERIALIZED VIEW category_products_count as
+select c.category_id, category_name, count(*) as products_count
+from category c join product p
+on c.category_id = p.category_id
+and p.is_deleted = false
+group by c.category_id
+order by c.category_id;
+
+select * from category_products_count limit 10;
+
+
+-- Notes: 
+-- if query is heavily used in dashborad, we can use Denormalized table or column
+-- but if it is less frequently used, for example " every month or week", we can use Materlialized View with cron job for refresh.
+
+
+
 
 
 
