@@ -370,6 +370,8 @@ select * from customer_total_spending order by total_spending desc limit 2;
 ## Example 3
 ### Write SQL Query to Calculate the revenue generated from each product category.
 ```sql
+
+
 --  Write SQL Query to Calculate the revenue generated from each product category.
 
 select c.category_id, category_name,  p.product_id, product_name,
@@ -460,19 +462,16 @@ order by c.category_id;
     FOR EACH ROW EXECUTE FUNCTION update_product_revenue();
 
    -- test the trigger
-
-   select * from product_revenue where product_id = 1000004;
-   
-   select * from order_details where product_id = 1;
-   
-   select count(*) from order_details;
    -- insert existing product to order_details table.
+   select * from product_revenue where product_id = 1; --found
+   
    insert into order_details (order_detail_id, order_id, product_id, quantity, unit_price)
    values (20000001, 1, 1, 1, 112);
    
-   select * from product_revenue where product_id = 1;
+   select revenue_per_product from product_revenue where product_id = 1; -- the value increased
    
    -- insert new product to order_details table.
+   select * from product_revenue where product_id = 1000004; -- not found
    
    insert into product (product_id, category_id, product_name, description, price, stock_quantity)
    values (1000004, 1, 'sport mate', 'sports machines', 100, 20);
@@ -480,7 +479,7 @@ order by c.category_id;
    insert into order_details (order_detail_id, order_id, product_id, quantity, unit_price)
    values (20000003, 1, 1000004, 2, 100);
    
-   select * from product_revenue where product_id = 1000004;
+   select * from product_revenue where product_id = 1000004; -- new row is added to product_revenue table
    
    -- query after denormlized table
       select * from product_revenue where category_id = 1;
@@ -498,12 +497,12 @@ order by c.category_id;
           group by c.category_id, p.product_id
           order by c.category_id;
         
-        
           select * from category_product_revenue where category_id = 1;
   -- Notes 
         -- The descion of creating either denormalized table or materialized view depends on frequency of using report query.
         -- if it is displayed weekly or monthly on the dash board, materialized view is good with schedule cron job for updating.
         -- if it is displayed daily, denormalized table is good as it will not need to run the that complex query and consume CPU frequently.
 ```
+
 
 
