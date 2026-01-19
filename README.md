@@ -228,7 +228,140 @@ select * from category_products_count limit 10;
 -- if query is heavily used in dashborad, we can use Denormalized table or column
 -- but if it is less frequently used, for example " every month or week", we can use Materlialized View with cron job for refresh.
 
+## Example 2
+### Write SQL Query to Find the top customers by total spending. 
+```sql
+-- Write SQL Query to Find the top customers by total spending. 
 
+  select concat('first_name',' ', 'last_name') as customer_name , sum(total_amount) as total_spending
+  from customer c join orders o
+  on c.customer_id = o.customer_id 
+  group by c.customer_id 
+  order by total_spending desc
+  limit 10;
+  
+  -- ------------------------
+  -- Optimization techniques:
+  -- ------------------------
+  
+  -- 1- Create index on customer_id table on orders table 
+  create index idx_customer_id on orders(customer_id);
+  
+  -- ************************************************************************************************************
+  -- 2- Create Denormalized column "total_spending" in customer table
+  
+  alter table customer add column total_spending INT;
+  
+-- Test if column added 
+  select * from customer order by customer_id limit 1;
+  
+-- A- For Existing Data:
+-- fill 'total_spending' column with existing data 
+  update customer c 
+  set total_spending = o.total_spending
+  from 
+  (select customer_id, sum(total_amount) as total_spending
+  from orders 
+  group by customer_id 
+  ) as o
+  where c.customer_id = o.customer_id;
+
+
+-- -------------------------------------------------------------------------------------------------------------
+
+-- B- For Future Data:
+-- create trigger when insert new order to orders table, update total_spending column in customer table
+
+create or replace function increment_customer_total_spending()
+returns trigger as $$
+begin
+update customer c
+set total_spending = total_spending +  new.total_amount 
+where c.customer_id = new.customer_id;
+return new;
+end;
+$$
+language plpgsql;
+
+CREATE TRIGGER trigger_increment_customer_total_spending
+after insert on orders
+FOR EACH ROW EXECUTE FUNCTION increment_customer_total_spending();
+
+
+-- Test the trigger 
+select * from customer where customer_id = 1;
+-- Result is total_spending = 3,500;
+
+insert into orders (order_id, customer_id, order_date, total_amount)
+values (20000001, 1 , '2026-01-02', 1000);
+
+select * from customer where customer_id = 1;
+-- Result is total_spending = 4,500;
+-- Trigger is working
+
+
+-- What if customer cancel the order totally or partially and make refund to his money?
+-- This means that the total_amount will decrease... 
+-- No possible cases of increase total_amount of exixting order... right! so the update will be decrement.
+-- First we must add 'status' column to orders table for register last state of orders and its date.
+-- Second we need to make log table for orders to track all its states [confirmed, refunded...]  with timestamp
+-- for updating 'total spending' column on customer table we depend on 'total_amount' column and 'status' column  of orders table;
+   
+   alter table orders add column status varchar(15) not null default 'confirmed';
+   
+   create or replace function decrement_customer_total_spending()
+   returns trigger as $$
+   DECLARE
+     difference_amount INTEGER;
+   begin
+    if new.status = 'refunded' then
+   	difference_amount := old.total_amount - new.total_amount;
+    update customer c
+    set total_spending = total_spending - difference_amount
+    where c.customer_id = new.customer_id;
+    end if;
+    return new;
+    end;
+   $$
+   language plpgsql;
+   
+   create trigger trigger_decremrnt_customer_total_spending
+   after update on orders
+   for each row execute function decrement_customer_total_spending();
+   
+   -- Test Trigger
+   -- before update
+   select  total_spending from customer where customer_id = 1;
+   -- Result is total_spending = 8000;
+   select total_amount from orders where order_id =20000001;
+   -- Result is total_amount = 1000;
+   
+   update orders o
+   set total_amount = 600.
+       status = 'refunded'
+   where order_id = 20000001;
+   
+   select  total_spending from customer where customer_id = 1;
+   -- Result is total_spending = 7600;  -- the difference is 1000 - 600 = 400
+   
+   select total_amount from orders where order_id =20000001;
+   -- Result is total_amount = 600;
+
+   -- SQL query after denormalization will be 
+
+   select concat('first_name' , ' ' , 'last_name') as customer_name, total_spending from customer order by total_spending desc limit 2;
+   
+   -- ********************************************************************************************************************
+  -- 3- Create Materlized View
+
+CREATE MATERIALIZED VIEW customer_total_spending as
+  select c.customer_id, concat('first_name',' ', 'last_name') as customer_name , sum(total_amount) as total_spending
+  from customer c join orders o
+  on c.customer_id = o.customer_id 
+  group by c.customer_id 
+  order by total_spending desc;
+
+select * from customer_total_spending order by total_spending desc limit 2;
 
 
 
