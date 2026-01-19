@@ -506,3 +506,11 @@ order by c.category_id;
 
 
 
+
+
+
+
+
+<img width="1547" height="1012" alt="customer features" src="https://github.com/user-attachments/assets/d43354e9-a3d2-4620-950a-407edf250167" />
+
+
