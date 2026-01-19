@@ -229,7 +229,7 @@ select * from category_products_count limit 10;
 -- but if it is less frequently used, for example " every month or week", we can use Materlialized View with cron job for refresh.
 
 
-```md
+```
 ## Example 2
 ### Write SQL Query to Find the top customers by total spending. 
 ```sql
@@ -364,5 +364,6 @@ CREATE MATERIALIZED VIEW customer_total_spending as
   order by total_spending desc;
 
 select * from customer_total_spending order by total_spending desc limit 2;
-```md
+```
+
 
